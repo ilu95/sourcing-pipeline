@@ -85,8 +85,9 @@ export default function ItemForm({ onAdd }: ItemFormProps) {
           {hasPreview ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={form.imageUrl}
+              src={form.imageUrl.replace(/^http:\/\//i, "https://")}
               alt="preview"
+              referrerPolicy="no-referrer"
               onError={() => setImgError(true)}
               className="w-full h-full object-cover"
             />

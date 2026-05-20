@@ -42,8 +42,9 @@ export default function ItemCard({ item, onDelete, onStatusChange }: ItemCardPro
         ) : (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={item.imageUrl}
+            src={item.imageUrl.replace(/^http:\/\//i, "https://")}
             alt="product"
+            referrerPolicy="no-referrer"
             onError={() => setImgError(true)}
             className="w-full object-cover"
           />
