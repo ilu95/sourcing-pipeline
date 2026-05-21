@@ -2,9 +2,8 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { supabase, SourcingItemRow } from "./supabase";
-import { SourcingItem, Status } from "./types";
+import { SourcingItem, Status, Category } from "./types";
 
-// localStorage에서 사용하던 키 (마이그레이션 용도로만 참조)
 const LEGACY_STORAGE_KEY = "sourcing_items";
 
 /** DB row → 프론트엔드 상태 변환 */
@@ -14,7 +13,11 @@ function rowToItem(row: SourcingItemRow): SourcingItem {
     imageUrl: row.image_url,
     material: row.material as SourcingItem["material"],
     price: row.price,
+    priceCny: row.price_cny ?? undefined,
     sourceUrl: row.source_url,
+    sourcingReason: row.sourcing_reason ?? undefined,
+    category: (row.category as Category) ?? "기타",
+    expectedSellPrice: row.expected_sell_price ?? undefined,
     status: row.status as Status,
     createdAt: new Date(row.created_at).getTime(),
   };
@@ -25,10 +28,17 @@ function itemToRow(
   item: SourcingItem
 ): Omit<SourcingItemRow, "id" | "created_at"> {
   return {
-    image_url: item.imageUrl,           // camelCase → snake_case
+    image_url: item.imageUrl,
     material: item.material,
-    price: Math.floor(Number(item.price)), // integer 강제 변환
-    source_url: item.sourceUrl,         // camelCase → snake_case
+    price: Math.floor(Number(item.price)),
+    price_cny: item.priceCny != null ? Number(item.priceCny) : null,
+    source_url: item.sourceUrl,
+    sourcing_reason: item.sourcingReason ?? null,
+    category: item.category,
+    expected_sell_price:
+      item.expectedSellPrice != null
+        ? Math.floor(Number(item.expectedSellPrice))
+        : null,
     status: item.status,
   };
 }
@@ -50,7 +60,6 @@ export function useItems() {
     setItems((data as SourcingItemRow[]).map(rowToItem));
   }, []);
 
-  // 초기 데이터 로드
   useEffect(() => {
     let cancelled = false;
     fetchItems().then(() => {
@@ -61,7 +70,7 @@ export function useItems() {
 
   const addItem = useCallback(async (item: SourcingItem) => {
     const payload = itemToRow(item);
-    console.log("[useItems] insert payload:", payload); // 전송 직전 payload 확인
+    console.log("[useItems] insert payload:", payload);
 
     const { data, error } = await supabase
       .from("sourcing_items")
@@ -122,14 +131,16 @@ export function useItems() {
       return "empty";
     }
 
-    // id는 제외하여 DB가 새 UUID를 발급하도록 함
     const rows = legacy.map((item) => ({
       image_url: item.imageUrl,
       material: item.material,
-      price: item.price,
+      price: Math.floor(Number(item.price)),
+      price_cny: null,
       source_url: item.sourceUrl,
+      sourcing_reason: null,
+      category: "기타",
+      expected_sell_price: null,
       status: item.status,
-      // createdAt(ms) → ISO string으로 복원
       created_at: new Date(item.createdAt).toISOString(),
     }));
 

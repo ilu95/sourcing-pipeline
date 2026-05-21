@@ -1,42 +1,83 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useMemo } from "react";
 import { ImageIcon, PlusCircle, X } from "lucide-react";
 import {
   SourcingItem,
   Material,
   Status,
+  Category,
   MATERIAL_OPTIONS,
   STATUS_OPTIONS,
+  CATEGORY_OPTIONS,
 } from "@/lib/types";
 
 interface ItemFormProps {
   onAdd: (item: SourcingItem) => void;
+  exchangeRate: number;
 }
 
 const EMPTY_FORM = {
   imageUrl: "",
+  category: "기타" as Category,
   material: "써지컬스틸" as Material,
-  price: "",
+  priceCny: "",
+  expectedSellPrice: "",
+  sourcingReason: "",
   sourceUrl: "",
   status: "대기 중" as Status,
 };
 
-export default function ItemForm({ onAdd }: ItemFormProps) {
+const fmt = (n: number) =>
+  new Intl.NumberFormat("ko-KR").format(Math.floor(n));
+
+export default function ItemForm({ onAdd, exchangeRate }: ItemFormProps) {
   const [form, setForm] = useState(EMPTY_FORM);
   const [imgError, setImgError] = useState(false);
   const priceRef = useRef<HTMLInputElement>(null);
 
+  /** 원화 원가: CNY * 환율 * 1.1 (해운비 버퍼) */
+  const priceKrw = useMemo(() => {
+    const cny = parseFloat(form.priceCny);
+    if (!cny || cny <= 0) return null;
+    return Math.floor(cny * exchangeRate * 1.1);
+  }, [form.priceCny, exchangeRate]);
+
+  /** 예상 마진율 */
+  const marginRate = useMemo(() => {
+    const sell = parseFloat(form.expectedSellPrice);
+    if (!priceKrw || !sell || sell <= 0) return null;
+    return ((sell - priceKrw) / sell) * 100;
+  }, [priceKrw, form.expectedSellPrice]);
+
+  const marginColor =
+    marginRate === null
+      ? ""
+      : marginRate >= 40
+      ? "text-emerald-600"
+      : marginRate >= 25
+      ? "text-blue-600"
+      : marginRate >= 10
+      ? "text-amber-600"
+      : "text-red-500";
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.imageUrl || !form.price || !form.sourceUrl) return;
+    if (!form.imageUrl || !form.priceCny || !form.sourceUrl) return;
+    if (!priceKrw) return;
 
     const item: SourcingItem = {
       id: crypto.randomUUID(),
       imageUrl: form.imageUrl,
+      category: form.category,
       material: form.material,
-      price: Number(form.price),
+      price: priceKrw,
+      priceCny: parseFloat(form.priceCny),
       sourceUrl: form.sourceUrl,
+      sourcingReason: form.sourcingReason.trim() || undefined,
+      expectedSellPrice: form.expectedSellPrice
+        ? Math.floor(parseFloat(form.expectedSellPrice))
+        : undefined,
       status: form.status,
       createdAt: Date.now(),
     };
@@ -48,11 +89,9 @@ export default function ItemForm({ onAdd }: ItemFormProps) {
   const hasPreview = form.imageUrl.trim() !== "" && !imgError;
 
   return (
-    <form
-      onSubmit={handleSubmit}
-      className="flex flex-col gap-4"
-    >
-      {/* Image URL + Preview */}
+    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+
+      {/* 이미지 URL + Preview */}
       <div className="flex flex-col gap-2">
         <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
           이미지 URL
@@ -66,7 +105,7 @@ export default function ItemForm({ onAdd }: ItemFormProps) {
               setForm({ ...form, imageUrl: e.target.value });
               setImgError(false);
             }}
-            className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm placeholder-zinc-400 focus:border-zinc-400 focus:outline-none focus:ring-0 transition"
+            className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm placeholder-zinc-400 focus:border-zinc-400 focus:outline-none transition"
             required
           />
           {form.imageUrl && (
@@ -79,8 +118,6 @@ export default function ItemForm({ onAdd }: ItemFormProps) {
             </button>
           )}
         </div>
-
-        {/* Preview Box */}
         <div className="relative w-full aspect-square rounded-lg overflow-hidden bg-zinc-100 border border-zinc-200">
           {hasPreview ? (
             // eslint-disable-next-line @next/next/no-img-element
@@ -106,7 +143,23 @@ export default function ItemForm({ onAdd }: ItemFormProps) {
         </div>
       </div>
 
-      {/* Material */}
+      {/* 카테고리 */}
+      <div className="flex flex-col gap-2">
+        <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
+          카테고리
+        </label>
+        <select
+          value={form.category}
+          onChange={(e) => setForm({ ...form, category: e.target.value as Category })}
+          className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm focus:border-zinc-400 focus:outline-none transition appearance-none cursor-pointer"
+        >
+          {CATEGORY_OPTIONS.map((c) => (
+            <option key={c} value={c}>{c}</option>
+          ))}
+        </select>
+      </div>
+
+      {/* 소재 */}
       <div className="flex flex-col gap-2">
         <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
           소재
@@ -122,24 +175,70 @@ export default function ItemForm({ onAdd }: ItemFormProps) {
         </select>
       </div>
 
-      {/* Price */}
+      {/* 가격 섹션 */}
       <div className="flex flex-col gap-2">
         <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
-          사입 단가 (₩)
+          위안화 원가 (¥)
         </label>
         <input
           ref={priceRef}
           type="number"
-          placeholder="0"
+          placeholder="0.00"
           min={0}
-          value={form.price}
-          onChange={(e) => setForm({ ...form, price: e.target.value })}
+          step="0.01"
+          value={form.priceCny}
+          onChange={(e) => setForm({ ...form, priceCny: e.target.value })}
           className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm placeholder-zinc-400 focus:border-zinc-400 focus:outline-none transition"
           required
         />
+        {/* 원화 자동 계산 표시 */}
+        <div className="flex items-center justify-between rounded-lg bg-zinc-50 border border-zinc-200 px-3 py-2">
+          <span className="text-[11px] text-zinc-400">
+            ¥{form.priceCny || "0"} × {exchangeRate} × 1.1
+          </span>
+          <span className={`text-sm font-bold ${priceKrw ? "text-zinc-800" : "text-zinc-300"}`}>
+            ₩{priceKrw ? fmt(priceKrw) : "—"}
+          </span>
+        </div>
       </div>
 
-      {/* Source URL */}
+      {/* 예상 판매가 */}
+      <div className="flex flex-col gap-2">
+        <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
+          예상 판매가 (₩)
+        </label>
+        <input
+          type="number"
+          placeholder="0"
+          min={0}
+          value={form.expectedSellPrice}
+          onChange={(e) => setForm({ ...form, expectedSellPrice: e.target.value })}
+          className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm placeholder-zinc-400 focus:border-zinc-400 focus:outline-none transition"
+        />
+        {/* 마진율 실시간 표시 */}
+        {marginRate !== null && (
+          <div className={`flex items-center gap-1.5 text-xs font-semibold ${marginColor}`}>
+            <span>예상 마진율</span>
+            <span className="text-base">{marginRate.toFixed(1)}%</span>
+          </div>
+        )}
+      </div>
+
+      {/* 소싱 명분 */}
+      <div className="flex flex-col gap-2">
+        <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
+          소싱 명분
+        </label>
+        <textarea
+          placeholder="이 제품을 소싱하는 이유를 적어주세요"
+          value={form.sourcingReason}
+          onChange={(e) => setForm({ ...form, sourcingReason: e.target.value })}
+          rows={2}
+          className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm placeholder-zinc-400 focus:border-zinc-400 focus:outline-none transition resize-none"
+        />
+      </div>
+
+      {/* 1688 직링크 */}
       <div className="flex flex-col gap-2">
         <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
           1688 직링크
@@ -154,7 +253,7 @@ export default function ItemForm({ onAdd }: ItemFormProps) {
         />
       </div>
 
-      {/* Status */}
+      {/* 상태 */}
       <div className="flex flex-col gap-2">
         <label className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">
           상태
@@ -170,7 +269,6 @@ export default function ItemForm({ onAdd }: ItemFormProps) {
         </select>
       </div>
 
-      {/* Submit */}
       <button
         type="submit"
         className="mt-2 flex items-center justify-center gap-2 rounded-lg bg-zinc-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-zinc-700 active:bg-zinc-800 transition-colors"

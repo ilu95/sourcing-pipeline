@@ -7,6 +7,7 @@ import {
   Status,
   STATUS_OPTIONS,
   MATERIAL_STYLES,
+  CATEGORY_STYLES,
 } from "@/lib/types";
 
 const STATUS_SELECT_STYLES: Record<Status, string> = {
@@ -14,6 +15,22 @@ const STATUS_SELECT_STYLES: Record<Status, string> = {
   "샘플 발주": "bg-blue-50 text-blue-700 border-blue-200",
   "드롭🗑️": "bg-red-50 text-red-500 border-red-200",
 };
+
+const fmt = (n: number) =>
+  new Intl.NumberFormat("ko-KR", {
+    style: "currency",
+    currency: "KRW",
+    maximumFractionDigits: 0,
+  }).format(n);
+
+function marginBadge(cost: number, sell: number) {
+  const rate = ((sell - cost) / sell) * 100;
+  const label = `${rate.toFixed(1)}%`;
+  if (rate >= 40) return { label, cls: "bg-emerald-100 text-emerald-700" };
+  if (rate >= 25) return { label, cls: "bg-blue-100 text-blue-700" };
+  if (rate >= 10) return { label, cls: "bg-amber-100 text-amber-700" };
+  return { label, cls: "bg-red-100 text-red-500" };
+}
 
 interface ItemCardProps {
   item: SourcingItem;
@@ -24,14 +41,14 @@ interface ItemCardProps {
 export default function ItemCard({ item, onDelete, onStatusChange }: ItemCardProps) {
   const [imgError, setImgError] = useState(false);
 
-  const formattedPrice = new Intl.NumberFormat("ko-KR", {
-    style: "currency",
-    currency: "KRW",
-    maximumFractionDigits: 0,
-  }).format(item.price);
+  const margin =
+    item.expectedSellPrice && item.expectedSellPrice > 0 && item.price > 0
+      ? marginBadge(item.price, item.expectedSellPrice)
+      : null;
 
   return (
     <div className="group relative rounded-xl border border-zinc-200 bg-white overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
+
       {/* Image */}
       <div className="relative w-full bg-zinc-100">
         {imgError ? (
@@ -49,6 +66,13 @@ export default function ItemCard({ item, onDelete, onStatusChange }: ItemCardPro
             className="w-full object-cover"
           />
         )}
+
+        {/* Category badge — image overlay */}
+        <span
+          className={`absolute top-2 left-2 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold backdrop-blur-sm ${CATEGORY_STYLES[item.category]}`}
+        >
+          {item.category}
+        </span>
 
         {/* Hover action buttons */}
         <div className="absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -73,21 +97,42 @@ export default function ItemCard({ item, onDelete, onStatusChange }: ItemCardPro
 
       {/* Card body */}
       <div className="p-3 flex flex-col gap-2">
-        {/* Price */}
-        <p className="text-base font-bold text-zinc-900 tracking-tight">
-          {formattedPrice}
-        </p>
+
+        {/* 원화 원가 */}
+        <div className="flex items-baseline justify-between gap-1">
+          <p className="text-base font-bold text-zinc-900 tracking-tight">
+            {fmt(item.price)}
+          </p>
+          {item.priceCny != null && (
+            <span className="text-[10px] text-zinc-400">¥{item.priceCny}</span>
+          )}
+        </div>
+
+        {/* 예상 판매가 + 마진율 */}
+        {item.expectedSellPrice != null && (
+          <div className="flex items-center justify-between gap-1.5">
+            <span className="text-[11px] text-zinc-400">
+              판매가 <span className="font-medium text-zinc-600">{fmt(item.expectedSellPrice)}</span>
+            </span>
+            {margin && (
+              <span
+                className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold ${margin.cls}`}
+              >
+                마진 {margin.label}
+              </span>
+            )}
+          </div>
+        )}
 
         {/* Badges row */}
         <div className="flex flex-wrap items-center gap-1.5">
-          {/* Material badge */}
           <span
             className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium ${MATERIAL_STYLES[item.material]}`}
           >
             {item.material}
           </span>
 
-          {/* Status — native select styled as badge */}
+          {/* Status select */}
           <div className="relative inline-flex items-center">
             <select
               value={item.status}
@@ -108,16 +153,12 @@ export default function ItemCard({ item, onDelete, onStatusChange }: ItemCardPro
           </div>
         </div>
 
-        {/* Source link (text) */}
-        <a
-          href={item.sourceUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-1 text-[11px] text-zinc-400 hover:text-zinc-600 transition-colors truncate mt-0.5"
-        >
-          <ExternalLink size={10} />
-          <span className="truncate">{item.sourceUrl}</span>
-        </a>
+        {/* 소싱 명분 */}
+        {item.sourcingReason && (
+          <p className="text-[11px] text-zinc-500 leading-relaxed line-clamp-2">
+            {item.sourcingReason}
+          </p>
+        )}
       </div>
     </div>
   );

@@ -11,7 +11,11 @@ export interface SourcingItemRow {
   image_url: string;
   material: string;
   price: number;
+  price_cny: number | null;
   source_url: string;
+  sourcing_reason: string | null;
+  category: string;
+  expected_sell_price: number | null;
   status: string;
   created_at: string;
 }
