@@ -4,6 +4,9 @@ import { useState, useEffect, useCallback } from "react";
 import { supabase, SourcingItemRow } from "./supabase";
 import { SourcingItem, Status } from "./types";
 
+// localStorage에서 사용하던 키 (마이그레이션 용도로만 참조)
+const LEGACY_STORAGE_KEY = "sourcing_items";
+
 /** DB row → 프론트엔드 상태 변환 */
 function rowToItem(row: SourcingItemRow): SourcingItem {
   return {
@@ -35,29 +38,27 @@ export function useItems() {
   const [items, setItems] = useState<SourcingItem[]>([]);
   const [hydrated, setHydrated] = useState(false);
 
+  const fetchItems = useCallback(async () => {
+    const { data, error } = await supabase
+      .from("sourcing_items")
+      .select("*")
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("[useItems] fetch error:", error.message);
+      return;
+    }
+    setItems((data as SourcingItemRow[]).map(rowToItem));
+  }, []);
+
   // 초기 데이터 로드
   useEffect(() => {
     let cancelled = false;
-
-    async function fetchItems() {
-      const { data, error } = await supabase
-        .from("sourcing_items")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-      if (cancelled) return;
-
-      if (error) {
-        console.error("[useItems] fetch error:", error.message);
-      } else {
-        setItems((data as SourcingItemRow[]).map(rowToItem));
-      }
-      setHydrated(true);
-    }
-
-    fetchItems();
+    fetchItems().then(() => {
+      if (!cancelled) setHydrated(true);
+    });
     return () => { cancelled = true; };
-  }, []);
+  }, [fetchItems]);
 
   const addItem = useCallback(async (item: SourcingItem) => {
     const { data, error } = await supabase
@@ -101,5 +102,44 @@ export function useItems() {
     );
   }, []);
 
-  return { items, hydrated, addItem, removeItem, updateStatus };
+  /**
+   * localStorage에 남아있는 기존 데이터를 Supabase로 일괄 이전.
+   * @returns "empty" | "success" | "error"
+   */
+  const migrateFromLocalStorage = useCallback(async (): Promise<
+    "empty" | "success" | "error"
+  > => {
+    let legacy: SourcingItem[] = [];
+    try {
+      const raw = localStorage.getItem(LEGACY_STORAGE_KEY);
+      if (!raw) return "empty";
+      legacy = JSON.parse(raw);
+      if (!Array.isArray(legacy) || legacy.length === 0) return "empty";
+    } catch {
+      return "empty";
+    }
+
+    // id는 제외하여 DB가 새 UUID를 발급하도록 함
+    const rows = legacy.map((item) => ({
+      image_url: item.imageUrl,
+      material: item.material,
+      price: item.price,
+      source_url: item.sourceUrl,
+      status: item.status,
+      // createdAt(ms) → ISO string으로 복원
+      created_at: new Date(item.createdAt).toISOString(),
+    }));
+
+    const { error } = await supabase.from("sourcing_items").insert(rows);
+    if (error) {
+      console.error("[useItems] migrate error:", error.message);
+      return "error";
+    }
+
+    localStorage.removeItem(LEGACY_STORAGE_KEY);
+    await fetchItems();
+    return "success";
+  }, [fetchItems]);
+
+  return { items, hydrated, addItem, removeItem, updateStatus, migrateFromLocalStorage };
 }

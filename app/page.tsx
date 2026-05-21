@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { Package, ChevronLeft, ChevronRight } from "lucide-react";
+import { useState, useCallback, useEffect } from "react";
+import { Package, ChevronLeft, ChevronRight, UploadCloud } from "lucide-react";
 import ItemForm from "@/components/ItemForm";
 import ItemCard from "@/components/ItemCard";
 import { useItems } from "@/lib/useItems";
@@ -10,16 +10,64 @@ import { Status } from "@/lib/types";
 const STATUS_FILTER_OPTIONS = ["전체", "대기 중", "샘플 발주", "드롭🗑️"] as const;
 type FilterOption = (typeof STATUS_FILTER_OPTIONS)[number];
 
+type ToastType = "success" | "error" | "info";
+type ToastState = { message: string; type: ToastType } | null;
+
+function Toast({ toast, onDismiss }: { toast: ToastState; onDismiss: () => void }) {
+  useEffect(() => {
+    if (!toast) return;
+    const t = setTimeout(onDismiss, 3500);
+    return () => clearTimeout(t);
+  }, [toast, onDismiss]);
+
+  if (!toast) return null;
+
+  const colors = {
+    success: "bg-emerald-600 text-white",
+    error: "bg-red-500 text-white",
+    info: "bg-zinc-700 text-white",
+  };
+
+  return (
+    <div
+      className={`fixed bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-2.5 rounded-xl shadow-lg text-sm font-medium animate-fade-in ${colors[toast.type]}`}
+    >
+      {toast.message}
+    </div>
+  );
+}
+
 export default function Home() {
-  const { items, hydrated, addItem, removeItem, updateStatus } = useItems();
+  const { items, hydrated, addItem, removeItem, updateStatus, migrateFromLocalStorage } = useItems();
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [filter, setFilter] = useState<FilterOption>("전체");
+  const [migrating, setMigrating] = useState(false);
+  const [toast, setToast] = useState<ToastState>(null);
+
+  const showToast = useCallback((message: string, type: ToastType) => {
+    setToast({ message, type });
+  }, []);
+
+  const handleMigrate = useCallback(async () => {
+    setMigrating(true);
+    const result = await migrateFromLocalStorage();
+    setMigrating(false);
+
+    if (result === "empty") {
+      showToast("옮길 데이터가 없습니다.", "info");
+    } else if (result === "success") {
+      showToast("클라우드 이전 완료!", "success");
+    } else {
+      showToast("이전 중 오류가 발생했습니다. 콘솔을 확인해주세요.", "error");
+    }
+  }, [migrateFromLocalStorage, showToast]);
 
   const filtered =
     filter === "전체" ? items : items.filter((i) => i.status === filter);
 
   return (
     <div className="flex h-screen overflow-hidden bg-zinc-50">
+      <Toast toast={toast} onDismiss={() => setToast(null)} />
       {/* Sidebar */}
       <aside
         className={`relative flex-shrink-0 transition-all duration-300 ease-in-out ${
@@ -43,11 +91,20 @@ export default function Home() {
             <ItemForm onAdd={addItem} />
           </div>
 
-          {/* Item count footer */}
-          <div className="px-5 py-3 border-t border-zinc-100">
+          {/* Item count + migration footer */}
+          <div className="px-5 py-3 border-t border-zinc-100 flex items-center justify-between gap-2">
             <p className="text-[11px] text-zinc-400">
               총 <span className="font-semibold text-zinc-600">{items.length}</span>개 아이템
             </p>
+            <button
+              onClick={handleMigrate}
+              disabled={migrating}
+              title="로컬 데이터를 클라우드(Supabase)로 이전"
+              className="flex items-center gap-1 px-2 py-1 rounded-md text-[10px] text-zinc-400 hover:text-zinc-600 hover:bg-zinc-100 disabled:opacity-40 transition-colors"
+            >
+              <UploadCloud size={11} />
+              {migrating ? "이전 중…" : "데이터 이전"}
+            </button>
           </div>
         </div>
       </aside>
