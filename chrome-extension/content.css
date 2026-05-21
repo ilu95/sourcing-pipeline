@@ -1,0 +1,5 @@
+/*
+  모달 및 토스트 스타일은 content.js 내 injectStyles()에서 주입합니다.
+  이 파일은 크롬이 content_scripts로 주입하는 빈 파일로 남겨두어
+  manifest.json 항목을 변경하지 않아도 됩니다.
+*/
