@@ -187,25 +187,23 @@ export default function ItemForm({ onAdd, exchangeRate }: ItemFormProps) {
         ) : (
           <div className="flex flex-col gap-1.5">
             {materialEntries.map((entry, idx) => (
-              <div key={idx} className="flex items-center gap-1.5">
+              <div key={idx} className="grid grid-cols-[1fr_1fr_auto] gap-1.5 items-center">
                 <input
                   type="text" placeholder="부위 (예: 체인)"
                   value={entry.part}
                   onChange={(e) => updateEntry(idx, "part", e.target.value)}
-                  className="flex-1 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm placeholder-zinc-400 focus:border-zinc-400 focus:outline-none transition"
+                  className="w-full min-w-0 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm placeholder-zinc-400 focus:border-zinc-400 focus:outline-none transition"
                 />
                 <input
                   type="text" placeholder="소재 (예: 스틸)"
                   value={entry.material}
                   onChange={(e) => updateEntry(idx, "material", e.target.value)}
-                  className="flex-1 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm placeholder-zinc-400 focus:border-zinc-400 focus:outline-none transition"
+                  className="w-full min-w-0 rounded-lg border border-zinc-200 bg-white px-2.5 py-1.5 text-sm placeholder-zinc-400 focus:border-zinc-400 focus:outline-none transition"
                 />
-                {materialEntries.length > 1 && (
-                  <button type="button" onClick={() => removeEntry(idx)}
-                    className="flex-shrink-0 text-zinc-400 hover:text-red-400 transition-colors">
-                    <X size={14} />
-                  </button>
-                )}
+                <button type="button" onClick={() => removeEntry(idx)}
+                  className={`flex-shrink-0 text-zinc-400 hover:text-red-400 transition-colors ${materialEntries.length === 1 ? "invisible" : ""}`}>
+                  <X size={14} />
+                </button>
               </div>
             ))}
             <button type="button"
