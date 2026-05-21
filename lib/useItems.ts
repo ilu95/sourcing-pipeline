@@ -12,33 +12,39 @@ function rowToItem(row: SourcingItemRow): SourcingItem {
     id: row.id,
     imageUrl: row.image_url,
     material: row.material as SourcingItem["material"],
+    materialDetail: Array.isArray(row.material_detail) ? row.material_detail : undefined,
     price: row.price,
     priceCny: row.price_cny ?? undefined,
     sourceUrl: row.source_url,
     sourcingReason: row.sourcing_reason ?? undefined,
     category: (row.category as Category) ?? "기타",
     expectedSellPrice: row.expected_sell_price ?? undefined,
+    isSampleAvailable: row.is_sample_available ?? false,
+    moq: row.moq ?? 1,
     status: row.status as Status,
     createdAt: new Date(row.created_at).getTime(),
   };
 }
 
-/** 프론트엔드 상태 → DB insert payload 변환 (id 제외 — DB가 uuid 발급) */
+/** 프론트엔드 상태 → DB upsert payload 변환 (id·created_at 제외) */
 function itemToRow(
   item: SourcingItem
 ): Omit<SourcingItemRow, "id" | "created_at"> {
   return {
     image_url: item.imageUrl,
     material: item.material,
+    material_detail: item.materialDetail?.length ? item.materialDetail : null,
     price: Math.floor(Number(item.price)),
     price_cny: item.priceCny != null ? Number(item.priceCny) : null,
     source_url: item.sourceUrl,
-    sourcing_reason: item.sourcingReason ?? null,
+    sourcing_reason: item.sourcingReason?.trim() || null,
     category: item.category,
     expected_sell_price:
       item.expectedSellPrice != null
         ? Math.floor(Number(item.expectedSellPrice))
         : null,
+    is_sample_available: item.isSampleAvailable,
+    moq: item.moq ?? 1,
     status: item.status,
   };
 }
@@ -86,6 +92,23 @@ export function useItems() {
     setItems((prev) => [rowToItem(data as SourcingItemRow), ...prev]);
   }, []);
 
+  const updateItem = useCallback(async (item: SourcingItem): Promise<boolean> => {
+    const payload = itemToRow(item);
+
+    const { error } = await supabase
+      .from("sourcing_items")
+      .update(payload)
+      .eq("id", item.id);
+
+    if (error) {
+      console.error("[useItems] update error:", error.message, error);
+      alert(`수정 실패: ${error.message}`);
+      return false;
+    }
+    setItems((prev) => prev.map((i) => (i.id === item.id ? item : i)));
+    return true;
+  }, []);
+
   const removeItem = useCallback(async (id: string) => {
     const { error } = await supabase
       .from("sourcing_items")
@@ -114,10 +137,6 @@ export function useItems() {
     );
   }, []);
 
-  /**
-   * localStorage에 남아있는 기존 데이터를 Supabase로 일괄 이전.
-   * @returns "empty" | "success" | "error"
-   */
   const migrateFromLocalStorage = useCallback(async (): Promise<
     "empty" | "success" | "error"
   > => {
@@ -134,12 +153,15 @@ export function useItems() {
     const rows = legacy.map((item) => ({
       image_url: item.imageUrl,
       material: item.material,
+      material_detail: null,
       price: Math.floor(Number(item.price)),
       price_cny: null,
       source_url: item.sourceUrl,
       sourcing_reason: null,
       category: "기타",
       expected_sell_price: null,
+      is_sample_available: false,
+      moq: 1,
       status: item.status,
       created_at: new Date(item.createdAt).toISOString(),
     }));
@@ -155,5 +177,13 @@ export function useItems() {
     return "success";
   }, [fetchItems]);
 
-  return { items, hydrated, addItem, removeItem, updateStatus, migrateFromLocalStorage };
+  return {
+    items,
+    hydrated,
+    addItem,
+    updateItem,
+    removeItem,
+    updateStatus,
+    migrateFromLocalStorage,
+  };
 }

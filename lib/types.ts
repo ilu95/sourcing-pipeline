@@ -9,10 +9,19 @@ export type Category =
   | "부자재"
   | "기타";
 
+/** 복합 소재 한 쌍 (부위 → 소재) */
+export interface MaterialEntry {
+  part: string;
+  material: string;
+}
+
 export interface SourcingItem {
   id: string;
   imageUrl: string;
+  /** 단일 소재 (복합 소재일 때는 "기타" fallback) */
   material: Material;
+  /** 복합 소재 배열 — 설정 시 material 대신 표시 */
+  materialDetail?: MaterialEntry[];
   /** 원화 원가 (price_cny * 환율 * 1.1) */
   price: number;
   priceCny?: number;
@@ -20,6 +29,8 @@ export interface SourcingItem {
   sourcingReason?: string;
   category: Category;
   expectedSellPrice?: number;
+  isSampleAvailable: boolean;
+  moq: number;
   status: Status;
   createdAt: number;
 }
