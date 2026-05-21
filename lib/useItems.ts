@@ -20,16 +20,15 @@ function rowToItem(row: SourcingItemRow): SourcingItem {
   };
 }
 
-/** 프론트엔드 상태 → DB insert payload 변환 */
+/** 프론트엔드 상태 → DB insert payload 변환 (id 제외 — DB가 uuid 발급) */
 function itemToRow(
   item: SourcingItem
-): Omit<SourcingItemRow, "created_at"> {
+): Omit<SourcingItemRow, "id" | "created_at"> {
   return {
-    id: item.id,
-    image_url: item.imageUrl,
+    image_url: item.imageUrl,           // camelCase → snake_case
     material: item.material,
-    price: item.price,
-    source_url: item.sourceUrl,
+    price: Math.floor(Number(item.price)), // integer 강제 변환
+    source_url: item.sourceUrl,         // camelCase → snake_case
     status: item.status,
   };
 }
@@ -61,14 +60,18 @@ export function useItems() {
   }, [fetchItems]);
 
   const addItem = useCallback(async (item: SourcingItem) => {
+    const payload = itemToRow(item);
+    console.log("[useItems] insert payload:", payload); // 전송 직전 payload 확인
+
     const { data, error } = await supabase
       .from("sourcing_items")
-      .insert(itemToRow(item))
+      .insert(payload)
       .select()
       .single();
 
     if (error) {
-      console.error("[useItems] insert error:", error.message);
+      console.error("[useItems] insert error:", error.message, error);
+      alert(`등록 실패: ${error.message}`);
       return;
     }
     setItems((prev) => [rowToItem(data as SourcingItemRow), ...prev]);
