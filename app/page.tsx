@@ -85,7 +85,7 @@ export default function Home() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("전체");
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>("전체");
   const [sort, setSort] = useState<SortOption>("date_desc");
-  const [exchangeRate, setExchangeRate] = useState(190);
+  const [exchangeRate, setExchangeRate] = useState(221);
   const [editingItem, setEditingItem] = useState<SourcingItem | null>(null);
   const [detailItem, setDetailItem] = useState<SourcingItem | null>(null);
   const [migrating, setMigrating] = useState(false);
