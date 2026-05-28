@@ -5,11 +5,14 @@ import { Package, ChevronLeft, ChevronRight, UploadCloud } from "lucide-react";
 import ItemForm from "@/components/ItemForm";
 import ItemCard from "@/components/ItemCard";
 import EditModal from "@/components/EditModal";
+import DetailModal from "@/components/DetailModal";
 import { useItems } from "@/lib/useItems";
 import { SourcingItem, Status, Category, CATEGORY_OPTIONS } from "@/lib/types";
 
 // ── Filter / Sort types ────────────────────────────────────────────────────
-const STATUS_OPTIONS_ALL = ["전체", "대기 중", "샘플 발주", "드롭🗑️"] as const;
+const STATUS_OPTIONS_ALL = [
+  "전체", "대기 중", "후보 선정", "샘플 발주", "샘플 도착", "본품 발주", "드롭🗑️",
+] as const;
 type StatusFilter = (typeof STATUS_OPTIONS_ALL)[number];
 type CategoryFilter = "전체" | Category;
 type SortOption = "date_desc" | "cost_asc" | "margin_desc";
@@ -73,7 +76,10 @@ function FilterSelect<T extends string>({
 
 // ── Page ──────────────────────────────────────────────────────────────────
 export default function Home() {
-  const { items, hydrated, addItem, updateItem, removeItem, updateStatus, migrateFromLocalStorage } = useItems();
+  const {
+    items, hydrated, addItem, updateItem, updateQA,
+    removeItem, updateStatus, migrateFromLocalStorage,
+  } = useItems();
 
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("전체");
@@ -81,6 +87,7 @@ export default function Home() {
   const [sort, setSort] = useState<SortOption>("date_desc");
   const [exchangeRate, setExchangeRate] = useState(190);
   const [editingItem, setEditingItem] = useState<SourcingItem | null>(null);
+  const [detailItem, setDetailItem] = useState<SourcingItem | null>(null);
   const [migrating, setMigrating] = useState(false);
   const [toast, setToast] = useState<ToastState>(null);
 
@@ -94,6 +101,13 @@ export default function Home() {
     else if (result === "success") showToast("클라우드 이전 완료!", "success");
     else showToast("이전 중 오류가 발생했습니다.", "error");
   }, [migrateFromLocalStorage, showToast]);
+
+  // detailItem을 최신 items 기준으로 동기화 (QA 업데이트 등 반영)
+  useEffect(() => {
+    if (!detailItem) return;
+    const latest = items.find((i) => i.id === detailItem.id);
+    if (latest) setDetailItem(latest);
+  }, [items]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Filter + Sort ──────────────────────────────────────────────────────
   const categoryOptions: CategoryFilter[] = ["전체", ...CATEGORY_OPTIONS];
@@ -119,6 +133,26 @@ export default function Home() {
   return (
     <div className="flex h-screen overflow-hidden bg-zinc-50">
       <Toast toast={toast} onDismiss={() => setToast(null)} />
+
+      {/* Detail modal */}
+      {detailItem && (
+        <DetailModal
+          item={detailItem}
+          onClose={() => setDetailItem(null)}
+          onEdit={(item) => {
+            setDetailItem(null);
+            setEditingItem(item);
+          }}
+          onStatusChange={async (id, status) => {
+            await updateStatus(id, status as Status);
+          }}
+          onQAUpdate={async (id, qaNotes, qaPassed) => {
+            const ok = await updateQA(id, qaNotes, qaPassed);
+            if (ok) showToast("QA 노트가 저장되었습니다.", "success");
+            return ok;
+          }}
+        />
+      )}
 
       {/* Edit modal */}
       {editingItem && (
@@ -174,7 +208,7 @@ export default function Home() {
       {/* Main */}
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
 
-        {/* Control bar — 한 줄로 통합 */}
+        {/* Control bar */}
         <header className="flex items-center gap-2 flex-wrap px-6 py-3 bg-white border-b border-zinc-200 flex-shrink-0">
 
           {/* Filters */}
@@ -235,6 +269,7 @@ export default function Home() {
                     onDelete={removeItem}
                     onStatusChange={(id, status) => updateStatus(id, status as Status)}
                     onEdit={setEditingItem}
+                    onDetail={setDetailItem}
                   />
                 </div>
               ))}

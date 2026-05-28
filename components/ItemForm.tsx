@@ -12,6 +12,7 @@ import {
   STATUS_OPTIONS,
   CATEGORY_OPTIONS,
 } from "@/lib/types";
+import { proxyImageUrl } from "@/lib/utils";
 
 interface ItemFormProps {
   onAdd: (item: SourcingItem) => void;
@@ -97,6 +98,7 @@ export default function ItemForm({ onAdd, exchangeRate }: ItemFormProps) {
       moq: parseInt(form.moq) || 1,
       status: form.status,
       createdAt: Date.now(),
+      qaPassed: false,
     };
     onAdd(item);
     setForm(EMPTY_FORM);
@@ -132,8 +134,8 @@ export default function ItemForm({ onAdd, exchangeRate }: ItemFormProps) {
         <div className="relative w-full aspect-square rounded-lg overflow-hidden bg-zinc-100 border border-zinc-200">
           {hasPreview ? (
             // eslint-disable-next-line @next/next/no-img-element
-            <img src={form.imageUrl.replace(/^http:\/\//i, "https://")} alt="preview"
-              referrerPolicy="no-referrer" onError={() => setImgError(true)}
+            <img src={proxyImageUrl(form.imageUrl)} alt="preview"
+              onError={() => setImgError(true)}
               className="w-full h-full object-cover" />
           ) : (
             <div className="flex flex-col items-center justify-center h-full gap-2 text-zinc-400">

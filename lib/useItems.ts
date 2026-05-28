@@ -9,10 +9,8 @@ const LEGACY_STORAGE_KEY = "sourcing_items";
 /** DB row → 프론트엔드 상태 변환 */
 function rowToItem(row: SourcingItemRow): SourcingItem {
   // material_detail: Supabase JSONB → JS array 안전 변환
-  // DB에서 오는 값은 이미 JS 객체/배열이므로 JSON.parse 불필요
   let materialDetail: SourcingItem["materialDetail"] = undefined;
   if (Array.isArray(row.material_detail) && row.material_detail.length > 0) {
-    // 각 entry가 {part, material} 구조인지 방어적 검증
     materialDetail = row.material_detail.filter(
       (e): e is { part: string; material: string } =>
         e != null &&
@@ -41,6 +39,8 @@ function rowToItem(row: SourcingItemRow): SourcingItem {
     moq: Number(row.moq) || 1,
     status: row.status as Status,
     createdAt: new Date(row.created_at).getTime(),
+    qaNotes: row.qa_note ?? undefined,
+    qaPassed: Boolean(row.qa_passed),
   };
 }
 
@@ -49,24 +49,22 @@ function rowToItem(row: SourcingItemRow): SourcingItem {
  * material_detail (jsonb):
  *   - Supabase JS 클라이언트는 JS 배열/객체를 그대로 JSONB로 전송합니다.
  *   - JSON.stringify는 불필요 (이중 직렬화 버그 방지를 위해 금지).
- *   - 값이 없으면 null을 명시적으로 보내 DB 컬럼을 NULL로 갱신합니다.
  */
 function itemToRow(
   item: SourcingItem
 ): Omit<SourcingItemRow, "id" | "created_at"> {
-  // material_detail: 유효한 entry만 필터링 후 JS 배열 그대로 전달
   const materialDetail: SourcingItemRow["material_detail"] =
     Array.isArray(item.materialDetail) && item.materialDetail.length > 0
       ? item.materialDetail
           .filter((e) => e.part?.trim() && e.material?.trim())
           .map((e) => ({ part: e.part.trim(), material: e.material.trim() }))
-          .filter((e) => e.part && e.material) // 빈 문자열 최종 방어
+          .filter((e) => e.part && e.material)
       : null;
 
   return {
     image_url: item.imageUrl,
     material: item.material,
-    material_detail: materialDetail,                        // JSONB: JS 배열 또는 null
+    material_detail: materialDetail,
     price: Math.floor(Number(item.price)),
     price_cny: item.priceCny != null ? Number(item.priceCny) : null,
     source_url: item.sourceUrl,
@@ -79,6 +77,8 @@ function itemToRow(
     is_sample_available: Boolean(item.isSampleAvailable),
     moq: Math.max(1, Math.floor(Number(item.moq) || 1)),
     status: item.status,
+    qa_note: item.qaNotes?.trim() || null,
+    qa_passed: Boolean(item.qaPassed),
   };
 }
 
@@ -118,7 +118,6 @@ export function useItems() {
       .single();
 
     if (error) {
-      // code·details·hint 포함한 풀 에러 로깅 (schema cache 미갱신 등 원인 파악용)
       console.error("[useItems] insert error:", {
         message: error.message,
         code:    (error as { code?: string }).code,
@@ -154,6 +153,29 @@ export function useItems() {
       return false;
     }
     setItems((prev) => prev.map((i) => (i.id === item.id ? item : i)));
+    return true;
+  }, []);
+
+  /** QA 필드만 부분 업데이트 */
+  const updateQA = useCallback(async (
+    id: string,
+    qaNotes: string,
+    qaPassed: boolean
+  ): Promise<boolean> => {
+    const { error } = await supabase
+      .from("sourcing_items")
+      .update({ qa_note: qaNotes.trim() || null, qa_passed: qaPassed })
+      .eq("id", id);
+
+    if (error) {
+      console.error("[useItems] updateQA error:", error.message);
+      return false;
+    }
+    setItems((prev) =>
+      prev.map((i) =>
+        i.id === id ? { ...i, qaNotes: qaNotes || undefined, qaPassed } : i
+      )
+    );
     return true;
   }, []);
 
@@ -212,6 +234,8 @@ export function useItems() {
       moq: 1,
       status: item.status,
       created_at: new Date(item.createdAt).toISOString(),
+      qa_note: null,
+      qa_passed: false,
     }));
 
     const { error } = await supabase.from("sourcing_items").insert(rows);
@@ -230,6 +254,7 @@ export function useItems() {
     hydrated,
     addItem,
     updateItem,
+    updateQA,
     removeItem,
     updateStatus,
     migrateFromLocalStorage,

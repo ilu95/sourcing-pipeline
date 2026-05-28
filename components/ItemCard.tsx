@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ExternalLink, Trash2, ImageOff, Pencil } from "lucide-react";
+import { ExternalLink, Trash2, ImageOff, Pencil, Eye } from "lucide-react";
 import {
   SourcingItem,
   Status,
@@ -10,19 +10,16 @@ import {
   MATERIAL_STYLES,
   CATEGORY_STYLES,
 } from "@/lib/types";
+import { proxyImageUrl, fmtKrw } from "@/lib/utils";
 
 const STATUS_SELECT_STYLES: Record<Status, string> = {
-  "대기 중": "bg-zinc-100 text-zinc-600 border-zinc-200",
+  "대기 중":   "bg-zinc-100 text-zinc-600 border-zinc-200",
+  "후보 선정": "bg-violet-50 text-violet-700 border-violet-200",
   "샘플 발주": "bg-blue-50 text-blue-700 border-blue-200",
-  "드롭🗑️": "bg-red-50 text-red-500 border-red-200",
+  "샘플 도착": "bg-emerald-50 text-emerald-700 border-emerald-200",
+  "본품 발주": "bg-indigo-50 text-indigo-700 border-indigo-200",
+  "드롭🗑️":   "bg-red-50 text-red-500 border-red-200",
 };
-
-const fmtKrw = (n: number) =>
-  new Intl.NumberFormat("ko-KR", {
-    style: "currency",
-    currency: "KRW",
-    maximumFractionDigits: 0,
-  }).format(n);
 
 function marginBadge(cost: number, sell: number) {
   const rate = ((sell - cost) / sell) * 100;
@@ -38,9 +35,10 @@ interface ItemCardProps {
   onDelete: (id: string) => void;
   onStatusChange: (id: string, status: Status) => void;
   onEdit: (item: SourcingItem) => void;
+  onDetail: (item: SourcingItem) => void;
 }
 
-export default function ItemCard({ item, onDelete, onStatusChange, onEdit }: ItemCardProps) {
+export default function ItemCard({ item, onDelete, onStatusChange, onEdit, onDetail }: ItemCardProps) {
   const [imgError, setImgError] = useState(false);
 
   const margin =
@@ -66,9 +64,8 @@ export default function ItemCard({ item, onDelete, onStatusChange, onEdit }: Ite
         ) : (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={item.imageUrl.replace(/^http:\/\//i, "https://")}
+            src={proxyImageUrl(item.imageUrl)}
             alt="product"
-            referrerPolicy="no-referrer"
             onError={() => setImgError(true)}
             className="w-full object-cover"
           />
@@ -79,8 +76,19 @@ export default function ItemCard({ item, onDelete, onStatusChange, onEdit }: Ite
           {item.category}
         </span>
 
+        {/* QA 합격 배지 */}
+        {item.qaPassed && (
+          <span className="absolute top-2 left-2 mt-5 inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-600 text-white">
+            ✓ QA 합격
+          </span>
+        )}
+
         {/* Hover action buttons */}
         <div className="absolute top-2 right-2 flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button onClick={() => onDetail(item)} title="상세 보기"
+            className="flex items-center justify-center w-7 h-7 rounded-full bg-white/90 backdrop-blur-sm text-zinc-600 hover:bg-white hover:text-indigo-600 shadow-sm border border-zinc-200 transition">
+            <Eye size={12} />
+          </button>
           <button onClick={() => onEdit(item)} title="수정"
             className="flex items-center justify-center w-7 h-7 rounded-full bg-white/90 backdrop-blur-sm text-zinc-600 hover:bg-white hover:text-zinc-900 shadow-sm border border-zinc-200 transition">
             <Pencil size={12} />

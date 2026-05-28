@@ -22,4 +22,20 @@ export interface SourcingItemRow {
   moq: number;
   status: string;
   created_at: string;
+  qa_note: string | null;
+  qa_passed: boolean;
+}
+
+/** 멀티 벤더 DB row shape */
+export interface SourcingVendorRow {
+  id: string;
+  item_id: string;
+  vendor_name: string | null;
+  source_url: string;
+  price_cny: number | null;
+  moq: number;
+  is_super_factory: boolean;
+  trade_amount: string | null;
+  review_count: number;
+  created_at: string;
 }
